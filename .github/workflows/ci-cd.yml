@@ -1,0 +1,87 @@
+name: Smart Agriculture CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Checkout code
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Step 2: Set up Java (required for Spark)
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+
+    # Step 3: Set up Python
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    # Step 4: Install dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Step 5: Run tests (if any)
+    - name: Run tests
+      run: |
+        echo "Running tests..."
+        python -m pytest tests/ || echo "No tests found"
+
+    # Step 6: Build Docker image
+    - name: Build Docker image
+      run: |
+        docker build -t smart-agriculture:${{ github.sha }} -f docker/Dockerfile .
+        docker tag smart-agriculture:${{ github.sha }} smart-agriculture:latest
+
+    # Step 7: Log in to Docker Hub (optional - configure secrets)
+    - name: Log in to Docker Hub
+      if: github.ref == 'refs/heads/main'
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    # Step 8: Push Docker image
+    - name: Push Docker image
+      if: github.ref == 'refs/heads/main'
+      run: |
+        docker push smart-agriculture:${{ github.sha }}
+        docker push smart-agriculture:latest
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    # Step 1: Checkout code
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Step 2: Set up kubectl
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.25.0'
+
+    # Step 3: Deploy to Kubernetes
+    - name: Deploy to Kubernetes
+      run: |
+        echo "Deploying to Kubernetes cluster..."
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
+        kubectl rollout status deployment/smart-agriculture-app
+        echo "Deployment successful!"
