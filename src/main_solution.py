@@ -96,6 +96,7 @@ print("=" * 80)
 weather_rdd = weather_df.rdd
 soil_rdd = soil_df.rdd
 crop_rdd = crop_df.rdd
+iot_rdd = iot_df.rdd
 
 print("\nTRANSFORMATION OPERATIONS:")
 

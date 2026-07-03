@@ -117,7 +117,7 @@ LOAD        -> Save to Parquet (optimized) and CSV (compatible)
 ## 4. DevOps Components
 
 ### Docker
-- Base image: `bitnami/spark:3.4.1`
+- Base image: `apache/spark:3.4.1`
 - Includes all dependencies
 - Run with: `docker build -t smart-agriculture . && docker run smart-agriculture`
 
