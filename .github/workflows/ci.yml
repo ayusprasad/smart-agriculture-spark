@@ -1,0 +1,113 @@
+name: Smart Agriculture CI/CD Pipeline
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: smart-agriculture
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKER_PASSWORD }}
+
+    steps:
+    # Step 1: Checkout code
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    # Step 2: Set up Java (required for Spark)
+    - name: Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+
+    # Step 3: Set up Python
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.11'
+
+    # Step 4: Install dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt pytest ruff
+
+    # Step 5: Run project checks
+    - name: Lint
+      run: ruff check --select E4,E7,E9 src/main_solution.py tests
+
+    - name: Compile
+      run: python -m compileall -q src tests
+
+    - name: Run tests
+      run: |
+        echo "Running tests..."
+        python -m pytest -q
+
+    # Step 6: Build Docker image
+    - name: Build Docker image
+      run: |
+        docker build -t "$IMAGE_NAME:${{ github.sha }}" -f docker/Dockerfile .
+        docker tag "$IMAGE_NAME:${{ github.sha }}" "$IMAGE_NAME:latest"
+
+    # Step 7: Log in to Docker Hub
+    - name: Log in to Docker Hub
+      if: github.ref == 'refs/heads/main' && env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+      uses: docker/login-action@v3
+      with:
+        username: ${{ env.DOCKERHUB_USERNAME }}
+        password: ${{ env.DOCKERHUB_TOKEN }}
+
+    # Step 8: Push Docker image
+    - name: Push Docker image
+      if: github.ref == 'refs/heads/main' && env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+      run: |
+        docker tag "$IMAGE_NAME:${{ github.sha }}" "$DOCKERHUB_USERNAME/$IMAGE_NAME:${{ github.sha }}"
+        docker tag "$IMAGE_NAME:${{ github.sha }}" "$DOCKERHUB_USERNAME/$IMAGE_NAME:latest"
+        docker push "$DOCKERHUB_USERNAME/$IMAGE_NAME:${{ github.sha }}"
+        docker push "$DOCKERHUB_USERNAME/$IMAGE_NAME:latest"
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    env:
+      KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+
+    steps:
+    # Step 1: Checkout code
+    - name: Checkout code
+      if: env.KUBE_CONFIG_DATA != ''
+      uses: actions/checkout@v7
+
+    # Step 2: Set up kubectl
+    - name: Set up kubectl
+      if: env.KUBE_CONFIG_DATA != ''
+      uses: azure/setup-kubectl@v4
+      with:
+        version: 'v1.25.0'
+
+    # Step 3: Configure kubeconfig
+    - name: Configure kubeconfig
+      if: env.KUBE_CONFIG_DATA != ''
+      run: |
+        mkdir -p "$HOME/.kube"
+        echo "$KUBE_CONFIG_DATA" | base64 --decode > "$HOME/.kube/config"
+
+    # Step 4: Deploy to Kubernetes
+    - name: Deploy to Kubernetes
+      if: env.KUBE_CONFIG_DATA != ''
+      run: |
+        echo "Deploying to Kubernetes cluster..."
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
+        kubectl rollout status deployment/smart-agriculture-app
+        echo "Deployment successful!"
+
+    - name: Skip Kubernetes deploy
+      if: env.KUBE_CONFIG_DATA == ''
+      run: echo "KUBE_CONFIG_DATA secret is not configured; skipping Kubernetes deploy."
