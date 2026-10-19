@@ -20,6 +20,7 @@ REQUIREMENTS:
 # =============================================================================
 # STEP 0: IMPORT LIBRARIES
 # =============================================================================
+from pyspark import StorageLevel
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -219,8 +220,6 @@ weather_kv.unpersist()
 print("\n2. unpersist() - Removed from cache")
 
 # Different persistence levels
-from pyspark import StorageLevel
-
 # MEMORY_ONLY (default)
 weather_kv.persist(StorageLevel.MEMORY_ONLY)
 print("\n3. MEMORY_ONLY - Stored in RAM only")
