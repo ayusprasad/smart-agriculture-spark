@@ -39,6 +39,12 @@ jobs:
         pip install -r requirements.txt pytest ruff
 
     # Step 5: Run project checks
+    - name: Lint
+      run: ruff check --select E4,E7,E9 src/main_solution.py tests
+
+    - name: Compile
+      run: python -m compileall -q src tests
+
     - name: Run tests
       run: |
         echo "Running tests..."
