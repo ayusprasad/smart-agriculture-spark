@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  spark-analytics:
+    build: .
+    container_name: smart-agri-spark
+    volumes:
+      - ./output:/app/output
+      - ./data:/app/data
+    environment:
+      - SPARK_HOME=/opt/spark
+      - PYTHONPATH=/app
